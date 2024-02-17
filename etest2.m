@@ -21,7 +21,7 @@ neutralPot = -0.1;
 screenPot = 2241;
 accelPot = -400;
 sheathPot = plasmaPot - 0.5 * elecTemp;
-currentBeamlet = 5*1e-4; % amps
+currentBeamlet = 1*1e-4; % amps
 
 fixedPots = zeros(grain+1);
 % pretty values: plasma 1600, screen 2000, accel -100
@@ -119,51 +119,55 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
     % particles will behave based on oldspace, particle behaviour will be used to inform newspace
     newSpace = zeros(grain+1);
 
-    newPots = fixedPots;
-
-    % loop for finding the potentials
-    potIters = 0;
-    while 1 % TODO make pot tolerance adaptive?
-        % TODO or maybe this should run until it satisfies Poisson's
-        % equation to some tolerance?
-        % TODO this operation can probably be paralellized, find some way
-        % of doing that?
-        
-        oldPots = newPots;
-        % oldPots = oldPots + 2 * (newPots - oldPots)
-        newPots = zeros(grain+1);
-        divisor = -2 / cellDeltas(1).^2 - 2 / cellDeltas(2).^2;
-        for xIndex = 1:(grain(1)+1)
-            for yIndex = 1:(grain(2)+1)
-                if fixedPots(xIndex, yIndex) == 0
-                    % TODO the x lims are maybe fine as mirrors
-                    % but we should maybe try making them hard caps?
-                    % not sure if that will break anything though
-                    % in reality once the sheaths are implemented this
-                    % shouldn't be an issue lolmao
-                    xDown = max(1, xIndex - 1); % mirror(xIndex - 1, 1, grain(1)+1);
-                    xUp = min(grain(1) + 1, xIndex + 1); % mirror(xIndex + 1, 1, grain(1)+1);
-                    yDown = mirror(yIndex - 1, 1, grain(2)+1);
-                    yUp = mirror(yIndex + 1, 1, grain(2)+1);
-                    charge = oldSpace(xIndex, yIndex);
-                    
-                    xDiff = (oldPots(xDown, yIndex) + oldPots(xUp, yIndex)) / cellDeltas(1).^2;
-                    yDiff = (oldPots(xIndex, yDown) + oldPots(xIndex, yUp)) / cellDeltas(2).^2;
-                    newPots(xIndex, yIndex) = (- charge - xDiff - yDiff) / divisor;
-                end
-            end
-        end
-
-        newPots = newPots + fixedPots;
-        potIters = potIters + 1;
-
-        if max(max(abs(newPots - oldPots))) < potTolerance || potIters > maxPotIters
-            break;
-        end
-
-        % TODO implement some sort of relaxation/easing here?
-
-    end
+    
+    [newPots, potIters] = calcPotsJacobi1(fixedPots, oldPots, oldSpace, cellDeltas, potTolerance, maxPotIters);
+    % 
+    % newPots = fixedPots;
+    % 
+    % % loop for finding the potentials
+    % potIters = 0;
+    % 
+    % while 1 % TODO make pot tolerance adaptive?
+    %     % TODO or maybe this should run until it satisfies Poisson's
+    %     % equation to some tolerance?
+    %     % TODO this operation can probably be paralellized, find some way
+    %     % of doing that?
+    % 
+    %     oldPots = newPots;
+    %     % oldPots = oldPots + 2 * (newPots - oldPots)
+    %     newPots = zeros(grain+1);
+    %     divisor = -2 / cellDeltas(1).^2 - 2 / cellDeltas(2).^2;
+    %     for xIndex = 1:(grain(1)+1)
+    %         for yIndex = 1:(grain(2)+1)
+    %             if fixedPots(xIndex, yIndex) == 0
+    %                 % TODO the x lims are maybe fine as mirrors
+    %                 % but we should maybe try making them hard caps?
+    %                 % not sure if that will break anything though
+    %                 % in reality once the sheaths are implemented this
+    %                 % shouldn't be an issue lolmao
+    %                 xDown = max(1, xIndex - 1); % mirror(xIndex - 1, 1, grain(1)+1);
+    %                 xUp = min(grain(1) + 1, xIndex + 1); % mirror(xIndex + 1, 1, grain(1)+1);
+    %                 yDown = mirror(yIndex - 1, 1, grain(2)+1);
+    %                 yUp = mirror(yIndex + 1, 1, grain(2)+1);
+    %                 charge = oldSpace(xIndex, yIndex);
+    % 
+    %                 xDiff = (oldPots(xDown, yIndex) + oldPots(xUp, yIndex)) / cellDeltas(1).^2;
+    %                 yDiff = (oldPots(xIndex, yDown) + oldPots(xIndex, yUp)) / cellDeltas(2).^2;
+    %                 newPots(xIndex, yIndex) = (- charge - xDiff - yDiff) / divisor;
+    %             end
+    %         end
+    %     end
+    % 
+    %     newPots = newPots + fixedPots;
+    %     potIters = potIters + 1;
+    % 
+    %     if max(max(abs(newPots - oldPots))) < potTolerance || potIters > maxPotIters
+    %         break;
+    %     end
+    % 
+    %     % TODO implement some sort of relaxation/easing here?
+    % 
+    % end
 
     fprintf('Potential iterations: %g\n', potIters)
     % TODO maybe also print the calculation time

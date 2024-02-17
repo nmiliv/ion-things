@@ -12,9 +12,9 @@ if any(dims ~= size(oldPots)) || ...
     error('input arrays should be of equal size');
 end
 
-if any(oldPots ~= fixedPots)
-    fprintf("calcPotsJacobi1: recevied unique oldPots\n")
-end
+% if any(any(oldPots ~= fixedPots))
+%     fprintf("calcPotsJacobi1: recevied unique oldPots\n")
+% end
 iters = 0;
 
 newPots = fixedPots;
