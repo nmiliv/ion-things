@@ -21,7 +21,7 @@ neutralPot = -0.1;
 screenPot = 2241;
 accelPot = -400;
 sheathPot = plasmaPot - 0.5 * elecTemp;
-currentBeamlet = 1*1e-4; % amps
+currentBeamlet = 2*1e-4; % amps
 
 fixedPots = zeros(grain+1);
 % pretty values: plasma 1600, screen 2000, accel -100
@@ -120,7 +120,9 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
     newSpace = zeros(grain+1);
 
     
-    [newPots, potIters] = calcPotsJacobi1(fixedPots, oldPots, oldSpace, cellDeltas, potTolerance, maxPotIters);
+    [newPots, potIters] = calcPotsJacobi2(fixedPots, oldPots, oldSpace, plasmaPot, elecTemp, cellDeltas, potTolerance, maxPotIters);
+    % noElecPots = calcPotsJacobi1(fixedPots, oldPots, oldSpace, cellDeltas, potTolerance, maxPotIters);
+    % fprintf("max pot difference: %g\n", max(max(abs(newPots - noElecPots))));
     % 
     % newPots = fixedPots;
     % 
