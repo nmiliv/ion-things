@@ -6,9 +6,9 @@ clear;
 % to 'display' properly. Also means that (x,y) translates nicely to
 % (row,col) format.
 pnum = 500; % number of particles each iteration
-grain = [400, 100]; % (x,y) ordered pair of cells in each direction
+grain = [500, 100]; % (x,y) ordered pair of cells in each direction
 % we'll assume that eveything starts at the origin, quadrant 1.
-maxes = [0.03, 0.01]; % max axial, radial distance
+maxes = [0.02, 0.002]; % max axial, radial distance
 cellDeltas = maxes./grain;
 maxSimSteps = 5000; % TODO wait this should be reactive to mesh size bc we can prove a particle mut take at least 3*n steps to cross the sim
 % this'll need to be bigger than 3*n tho, bc particles might loop around or
@@ -21,7 +21,7 @@ neutralPot = -0.1;
 screenPot = 2241;
 accelPot = -400;
 sheathPot = plasmaPot - 0.5 * elecTemp;
-currentBeamlet = 2*1e-4; % amps
+currentBeamlet = 0.5*1e-4; % amps
 
 fixedPots = zeros(grain+1);
 % pretty values: plasma 1600, screen 2000, accel -100
@@ -30,14 +30,54 @@ fixedPots = zeros(grain+1);
 % 'driven' potential instead of a 'driving' potential). So if you want to
 % fix a potential to zero, just fix to some small number like 0.1.
 % fixedPots = addRect(fixedPots, [0.005, 0.00], [0.002, 0.005], cellDeltas, 1);
-fixedPots = addRect(fixedPots, [0.01, 0.00], [0.0004, 0.005], cellDeltas, screenPot);
-fixedPots = addRect(fixedPots, [0.00, 0.00], [1.5*cellDeltas(1), maxes(2)+cellDeltas(2)], cellDeltas, plasmaPot);
+fixedPots = addRect(fixedPots, [0.005, 0.00], [0.0004, 0.001], cellDeltas, screenPot);
+fixedPots = addRect(fixedPots, [0.00, 0.00], [1*cellDeltas(1), maxes(2)+cellDeltas(2)], cellDeltas, plasmaPot);
 fixedPots = addRect(fixedPots, [maxes(1)-0.001, 0.00], [0.001, maxes(2)+cellDeltas(2)], cellDeltas, neutralPot);
-fixedPots = addRect(fixedPots, [0.0114, 0.00], [0.0008, 0.004], cellDeltas, accelPot);
+fixedPots = addRect(fixedPots, [0.0064, 0.00], [0.0008, 0.0014], cellDeltas, accelPot);
+
+
+%{
+so I guess it's time to talk about how the nodes work bc that's actually
+important now. Pcolor is a bit misleading here, since it colors a cell
+based on the bottom-left corner and ignore the topmost/leftmost cells.
+Don't trust pcolor.
+
+Here's some nodes, marked as X:
+X--X--X
+|  |  |
+|  |  |
+X--X--X
+|  |  |
+|  |  |
+X--X--X
+
+If a node has a fixedPot, that mean's it's probably a solid (make sure to
+turn off solid checking in known plasma/space regions -- a bit of a hack
+but honestly not too bad imo??) The solid region for the center node is
+highlighted with o's:
+
+X--X--X
+|  |  |
+| ooo |
+X-oXo-X
+| ooo |
+|  |  |
+X--X--X
+
+basically, the node is at the center of a cell rather than the nodes
+defining the corners of the cells (node-is-cell vs. node-defines-cell). Is
+this a little innacurate? Yeah probably. But as long as the mesh is small
+enough it should be close enough lmao.
+
+TODO shit check if the bohm velocity is respected in the half-step velocity
+init thing
+%}
+
+
 
 % actually process initialization
 % [x, y, vx, vy, mass/charge]
-massCharge = (2.1802*10^-6)/(1.602*10^-0);
+massCharge = (2.1802*10^-6)/(1.602*10^-0); % mass / charge
 vBohm = 1 * sqrt(elecTemp / massCharge);
 ogParticles = [ones(pnum, 1) * 2 * cellDeltas(1), ...
     linspace(0,0.9999999999*maxes(2),pnum)', ...
@@ -121,58 +161,8 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
 
     
     [newPots, potIters] = calcPotsJacobi2(fixedPots, oldPots, oldSpace, plasmaPot, elecTemp, cellDeltas, potTolerance, maxPotIters);
-    % noElecPots = calcPotsJacobi1(fixedPots, oldPots, oldSpace, cellDeltas, potTolerance, maxPotIters);
-    % fprintf("max pot difference: %g\n", max(max(abs(newPots - noElecPots))));
-    % 
-    % newPots = fixedPots;
-    % 
-    % % loop for finding the potentials
-    % potIters = 0;
-    % 
-    % while 1 % TODO make pot tolerance adaptive?
-    %     % TODO or maybe this should run until it satisfies Poisson's
-    %     % equation to some tolerance?
-    %     % TODO this operation can probably be paralellized, find some way
-    %     % of doing that?
-    % 
-    %     oldPots = newPots;
-    %     % oldPots = oldPots + 2 * (newPots - oldPots)
-    %     newPots = zeros(grain+1);
-    %     divisor = -2 / cellDeltas(1).^2 - 2 / cellDeltas(2).^2;
-    %     for xIndex = 1:(grain(1)+1)
-    %         for yIndex = 1:(grain(2)+1)
-    %             if fixedPots(xIndex, yIndex) == 0
-    %                 % TODO the x lims are maybe fine as mirrors
-    %                 % but we should maybe try making them hard caps?
-    %                 % not sure if that will break anything though
-    %                 % in reality once the sheaths are implemented this
-    %                 % shouldn't be an issue lolmao
-    %                 xDown = max(1, xIndex - 1); % mirror(xIndex - 1, 1, grain(1)+1);
-    %                 xUp = min(grain(1) + 1, xIndex + 1); % mirror(xIndex + 1, 1, grain(1)+1);
-    %                 yDown = mirror(yIndex - 1, 1, grain(2)+1);
-    %                 yUp = mirror(yIndex + 1, 1, grain(2)+1);
-    %                 charge = oldSpace(xIndex, yIndex);
-    % 
-    %                 xDiff = (oldPots(xDown, yIndex) + oldPots(xUp, yIndex)) / cellDeltas(1).^2;
-    %                 yDiff = (oldPots(xIndex, yDown) + oldPots(xIndex, yUp)) / cellDeltas(2).^2;
-    %                 newPots(xIndex, yIndex) = (- charge - xDiff - yDiff) / divisor;
-    %             end
-    %         end
-    %     end
-    % 
-    %     newPots = newPots + fixedPots;
-    %     potIters = potIters + 1;
-    % 
-    %     if max(max(abs(newPots - oldPots))) < potTolerance || potIters > maxPotIters
-    %         break;
-    %     end
-    % 
-    %     % TODO implement some sort of relaxation/easing here?
-    % 
-    % end
 
     fprintf('Potential iterations: %g\n', potIters)
-    % TODO maybe also print the calculation time
 
     oldPots = newPots;
 
@@ -220,13 +210,25 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
             lerp2d(subdivs(1), fracs(1), subdivs(2), fracs(2), efieldy)] ./ particle(5);
         % my ass should NOT be out debugging this late T.T
         % there's allegedly some indexing issue out here
+        % update from a couple weeks later: I think the indexing issue is
+        % fixed. Honestly can't remember what that was about.
         particle(3:4) = particle(3:4) + accels * tstep / 2;
+        % TODO still not sure how half-stepping works with the whole
+        % adaptive tstep thing.
 
         % fprintf('Running particle %g\n', pIndex)
         while (step < maxSimSteps) && all(particle(1:2) >= 0) && all(particle(1:2) < maxes)
             [subdivs, fractions] = subFracs(particle(1:2), cellDeltas);
             accels = [lerp2d(subdivs(1), fracs(1), subdivs(2), fracs(2), efieldx),...
                 lerp2d(subdivs(1), fracs(1), subdivs(2), fracs(2), efieldy)] ./ particle(5);
+
+            % TODO check for collisions here!
+            if subdivs(1) > 1 && subdivs(1) < grain(1) - 2 && ...
+                    fixedPots(subdivs(1) + 1 + round(fracs(1)), subdivs(2) + 1 + round(fracs(2))) ~= 0
+                % fprintf("collision!\n");
+                break;
+
+            end
             
             % honestly haven't the faintest clue why this is getting done
             % in this order. also there's probably some fancier matrix way
@@ -236,8 +238,9 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
             newSpace(subdivs(1) + 2, subdivs(2) + 1) = newSpace(subdivs(1) + 2, subdivs(2) + 1) + currentParticle * tstep / vCell * (fractions(1)) * (1 - fractions(2)) / eps0;
             newSpace(subdivs(1) + 1, subdivs(2) + 2) = newSpace(subdivs(1) + 1, subdivs(2) + 2) + currentParticle * tstep / vCell * (1 - fractions(1)) * (fractions(2)) / eps0;
             newSpace(subdivs(1) + 2, subdivs(2) + 2) = newSpace(subdivs(1) + 2, subdivs(2) + 2) + currentParticle * tstep / vCell * (fractions(1)) * (fractions(2)) / eps0;
-            % TODO scale these based on current carried (as calculated at
-            % the end??) WAIT NOPE I'VE FIGURED IT OUT!
+            % so I'm not sure if this should be defined as the total
+            % current entering the sheath or just the current that makes it
+            % out through the beamlet
 
             tstep = getStepDivSpace(particle(3), particle(4), cellDeltas(1), cellDeltas(2));
             
@@ -248,6 +251,8 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
                 particle(2) = mirrorPos;
                 particle(4) = -particle(4);
             end
+
+            
             
             
             % ugh things are still broken here
