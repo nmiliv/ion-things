@@ -1,16 +1,21 @@
 clc;
 clear;
 
+% TODO make sure the whole timestep thing isn't going wrong. break the
+% kinematics out into functions and make another tester for it (compare
+% against a known OK system, like constant tstep or something. or work out
+% the math properly)
+
 % initialization paramters
 % important to note that x->rows, y->cols. so all arrs must be transposed
 % to 'display' properly. Also means that (x,y) translates nicely to
 % (row,col) format.
 pnum = 500; % number of particles each iteration
-grain = [500, 100]; % (x,y) ordered pair of cells in each direction
+grain = [400, 80]; % (x,y) ordered pair of cells in each direction
 % we'll assume that eveything starts at the origin, quadrant 1.
 maxes = [0.02, 0.002]; % max axial, radial distance
 cellDeltas = maxes./grain;
-maxSimSteps = 5000; % TODO wait this should be reactive to mesh size bc we can prove a particle mut take at least 3*n steps to cross the sim
+maxSimSteps = 6000; % TODO wait this should be reactive to mesh size bc we can prove a particle mut take at least 3*n steps to cross the sim
 % this'll need to be bigger than 3*n tho, bc particles might loop around or
 % something idk. honestly this hard limit should get removed.
 
@@ -33,7 +38,8 @@ fixedPots = zeros(grain+1);
 fixedPots = addRect(fixedPots, [0.005, 0.00], [0.0004, 0.001], cellDeltas, screenPot);
 fixedPots = addRect(fixedPots, [0.00, 0.00], [1*cellDeltas(1), maxes(2)+cellDeltas(2)], cellDeltas, plasmaPot);
 fixedPots = addRect(fixedPots, [maxes(1)-0.001, 0.00], [0.001, maxes(2)+cellDeltas(2)], cellDeltas, neutralPot);
-fixedPots = addRect(fixedPots, [0.0064, 0.00], [0.0008, 0.0014], cellDeltas, accelPot);
+fixedPots = addRect(fixedPots, [0.01, 0.00], [0.0008, 0.0014], cellDeltas, accelPot);
+% should be at x = 0.0064
 
 
 %{
@@ -142,6 +148,7 @@ set(G.fig,...
     'Menubar', 'figure', ...
     'NumberTitle', 'off', ...
     'Name', 'figs');
+dispRatio = [grain(1)/maxes(1) grain(2)/maxes(2) 1];
 
 % TODO there should be some way of calculating the sheath and
 % neutralization surface. also maybe dynamically changing the size of the
@@ -280,15 +287,24 @@ while max(max(abs(oldSpace - newSpace))) > spaceTolerance && spaceIters < maxSpa
     figure(G.fig);
     clf;
     
-    tiledlayout(2,2);
-    nexttile
+    
+    tiledlayout(4,1);
+    ax = nexttile;
     plot(xTraces, yTraces)
-    nexttile
+    ax.DataAspectRatio = [1 1 1];
+    ax = nexttile;
     quiver(efieldx', efieldy')
-    nexttile
-    pcolor(oldPots')
-    nexttile
-    pcolor(newSpace')
+    ax.DataAspectRatio = dispRatio;
+    xlim(ax, [0,grain(1)+2]);
+    ylim(ax, [0,grain(2)+2]);
+    ax = nexttile;
+    s = pcolor(oldPots');
+    s.FaceColor = 'interp';
+    ax.DataAspectRatio = dispRatio;
+    ax = nexttile;
+    s = pcolor(newSpace');
+    s.FaceColor = 'interp';
+    ax.DataAspectRatio = dispRatio;
 
     fprintf('Space iteration: %g\n',spaceIters)
     spaceIters = spaceIters + 1;
